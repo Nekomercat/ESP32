@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "WiFi.h"
+#include <HTTPClient.h>
 
 const char *SSID_ = "Totalplay-0FA5";
 const char *WiFiPassword = "0FA577FBkQq8MRys";
@@ -44,22 +45,50 @@ void setup() {
 }
 
 void loop() {
+  //Read sensors and convert values
   DigitalTemp = analogRead(AnalogTemp);     // read the analog value
   Temperature = (DigitalTemp / 4096.0) * 3300 * 0.1;  // 3.3v reference and 12 bits resolution
   DigitalLight = analogRead(AnalogLight);
   LightLevel = map(DigitalLight, 0, 4095, 0, 100);
   DigitalHum = analogRead(AnalogHum);
   Humidity = map(DigitalHum, 0, 4095, 100, 0);
-  Serial.print("Raw value: ");
-  Serial.print(DigitalTemp);
-  Serial.print("\t Temperature : ");
-  Serial.print(Temperature, 2);
-  Serial.print("\t Raw value: ");
-  Serial.print(DigitalLight);
-  Serial.print("\t Light : ");
-  Serial.print(LightLevel);
-  Serial.print("\t Raw value: ");
-  Serial.print(DigitalHum);
-  Serial.print(" \t Humidity: ");
-  Serial.println(Humidity);
+
+  //Construct mutation string with sensors values
+  String parte1 = "{\"query\":\"mutation{createMedicion(Humedad: ";
+  String query = parte1 + Humidity + ",Luz: " + LightLevel + ",Temperatura: " + Temperature + "){id}}\"}";
+
+  if(WiFi.status() == WL_CONNECTED){
+    HTTPClient http;
+
+    Serial.print("[HTTP] begin...\n");
+    
+    http.begin("http://34.125.7.41:8093/graphql/"); //HTTP
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "JWT eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6IkVTUDMyIiwiZXhwIjoxNjM2NTgyNTg1LCJvcmlnSWF0IjoxNjM2NTgyMjg1fQ.l2IiVxYSCmEPzpUJtsln57P-HFIKGobv3c6mUflUrv4");
+
+    Serial.print("[HTTP] POST...\n");
+
+    Serial.println(query);
+    int httpCode = http.POST(query);   //Send the request
+    String payload = http.getString();    
+
+    // httpCode will be negative on error
+    if(httpCode > 0) {
+      // HTTP header has been send and Server response header has been handled
+      Serial.printf("[HTTP] POST... code: %d\n", httpCode);
+      /*if(httpCode == HTTP_CODE_OK) {
+        Serial.println("Respuesta HTTP_CODE_OK");
+        if(http.getSize()>0){
+          Serial.println("Size > 0");
+          String payload = http.getString();
+          Serial.println("after getString()");
+        }
+      }*/
+    }else {
+      Serial.printf("[HTTP] POST... failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+  }else {
+    Serial.println("Not Connected...");
+  }
+  delay(60000);
 }
